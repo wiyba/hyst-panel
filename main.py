@@ -14,7 +14,7 @@ import json
 import re
 import uvicorn
 
-db = os.path.join(os.path.dirname(__file__), "app.db")
+db = os.environ.get("HYST_DB_PATH", os.path.join(os.path.dirname(__file__), "app.db"))
 app = FastAPI()
 
 _dir = os.path.dirname(os.path.abspath(__file__))
