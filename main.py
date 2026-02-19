@@ -22,8 +22,10 @@ app.mount("/static", StaticFiles(directory=os.path.join(_dir, "static")), name="
 templates = Jinja2Templates(directory=os.path.join(_dir, "templates"))
 
 PROFILE_NAME_TPL = "\u0432\u0435\u0431\u0430 \u0432\u043f\u043d for {uname}"
+BASE_URL = "https://hyst.wiyba.org"
 
 STATUS_URL = "https://status.wiyba.workers.dev/raw"
+ALLOWED_AUTH_IPS = {"45.154.197.120", "87.121.105.20"}
 BROWSER_KW = ["Mozilla", "Chrome", "Safari", "Firefox", "Opera", "Edge", "TelegramBot", "WhatsApp"]
 
 with open(os.path.join(_dir, "clash.yaml")) as f:
@@ -86,7 +88,7 @@ def create_user(username):
         return
 
     password = str(uuid.uuid4())
-    sid = secrets.token_urlsafe(12)[:16]
+    sid = secrets.token_urlsafe(12)
 
     conn = get_db()
     cur = conn.cursor()
@@ -101,26 +103,36 @@ def create_user(username):
     print("password:", password)
     print("sid:", sid)
 
-def edit_user(username, password):
+def edit_user(username, password, sid):
     if not user_exists(username):
         print(f"{username} does not exist")
+        return
+    if not password and not sid:
+        print("nothing to update")
         return
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE users SET password = ? WHERE username = ?",
-        (password, username)
-    )
+    if password:
+        cur.execute(
+            "UPDATE users SET password = ? WHERE username = ?",
+            (password, username)
+        )
+    if sid:
+        cur.execute(
+            "UPDATE users SET sid = ? WHERE username = ?",
+            (sid, username)
+        )
     conn.commit()
     conn.close()
 
     print()
     print("username:", username)
-    print("password:", password)
+    if password: print("password:", password)
+    if sid: print("sid:", sid)
 
 def info_user(username):    
-    if username == "all":
+    if not username:
         conn = get_db()
         cur = conn.cursor()
         cur.execute("SELECT * FROM users")
@@ -136,27 +148,10 @@ def info_user(username):
         for u in users:
             name = u["username"].ljust(max(len(u["username"]) for u in users))
             pwd = u["password"].ljust(max(len(u["password"]) for u in users))
-            print(f"{name} | {pwd} | https://hyst.wiyba.org/sub/{u['sid']}")
+            print(f"{name} | {pwd} | {BASE_URL}/sub/{u['sid']}")
 
         return
-    
-    if username is None:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT username FROM users")
-        users = cur.fetchall()
-        conn.close()
 
-        if users is None:
-            print("no users found")
-            return
-        
-        print("users")
-        print("-" * (max(len(u["username"]) for u in users)))
-        for u in users:
-            print(u["username"])
-        return
-        
     if not user_exists(username):
         print(f"{username} does not exist")
         return
@@ -172,7 +167,7 @@ def info_user(username):
 
     print("username:", user["username"])
     print("password:", user["password"])
-    print("sub:", f"https://hyst.wiyba.org/sub/{user['sid']}")
+    print("sub:", f"{BASE_URL}/sub/{user['sid']}")
 
 def import_users(path):
     if not os.path.isfile(path):
@@ -211,7 +206,14 @@ def root():
 
 @app.post("/auth")
 async def auth(request: Request):
-    data = await request.json()
+    if request.client.host not in ALLOWED_AUTH_IPS:
+        return Response(status_code=403)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+
     auth_field = data.get("auth", "")
 
     if ":" not in auth_field:
@@ -253,7 +255,7 @@ async def subscription(sid: str, request: Request):
         return Response(status_code=404)
 
     uname, pwd = user["username"], user["password"]
-    sub_url = f"https://hyst.wiyba.org/sub/{sid}"
+    sub_url = f"{BASE_URL}/sub/{sid}"
     link_list = make_links(uname, pwd)
 
     accept = request.headers.get("accept", "")
@@ -387,7 +389,8 @@ if __name__ == "__main__":
         if sys.argv[1] == "edit" and len(sys.argv) == 3:
             username = sys.argv[2]
             password = input("new password: ")
-            edit_user(username, password)
+            sid = input("new sid: ")
+            edit_user(username, password, sid)
             sys.exit(0)
         if sys.argv[1] == "info":
             username = None
@@ -406,7 +409,6 @@ if __name__ == "__main__":
         print("  python3 main.py generate <username>")
         print("  python3 main.py edit <username>")
         print("  python3 main.py info")
-        print("  python3 main.py info all")
         print("  python3 main.py info <username>")
         print("  python3 main.py import <path>")
         sys.exit(0)
