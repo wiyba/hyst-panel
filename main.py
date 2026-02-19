@@ -43,7 +43,7 @@ SERVERS = [
 def make_links(uname, pwd):
     return [
         {
-            "uri": f"hy2://{uname}:{pwd}@{s['host']}:443/?sni={s['host']}#{s['label']}",
+            "uri": f"hysteria2://{uname}:{pwd}@{s['host']}:443/?sni={s['host']}#{s['label']}",
             "label": s["label"],
             "host": s["host"],
         }
@@ -174,6 +174,35 @@ def info_user(username):
     print("password:", user["password"])
     print("sub:", f"https://hyst.wiyba.org/sub/{user['sid']}")
 
+def import_users(path):
+    if not os.path.isfile(path):
+        print(f"{path} does not exist or is not a file")
+        return
+    
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+            username, password = line.split(":", 1)
+            username = username.strip()
+            password = password.strip()
+            if user_exists(username):
+                conn = get_db()
+                cur = conn.cursor()
+                cur.execute("SELECT password FROM users WHERE username = ?", (username,))
+                row = cur.fetchone()
+                conn.close()
+                if row and row["password"] == password:
+                    print(f"{username} exists")
+                else:
+                    print(f"{username} exists, fixing password")
+                    edit_user(username, password)
+                continue
+            create_user(username)
+            edit_user(username, password)
+
+
 
 @app.get("/")
 def root():
@@ -199,6 +228,13 @@ async def auth(request: Request):
     user = cur.fetchone()
     conn.close()
 
+    print()
+    print(f"username: {username}")
+    print(f"result: {bool(user)}")
+    print(f"requester: {request.client.host}")
+    print()
+
+
     if user:
         return JSONResponse({"ok": True, "id": username})
 
@@ -223,7 +259,11 @@ async def subscription(sid: str, request: Request):
     accept = request.headers.get("accept", "")
     ua = request.headers.get("user-agent", "")
     if "text/html" not in accept and not any(k in ua for k in BROWSER_KW):
-        print(ua)
+        print()
+        print(f"useragent: {ua}")
+        print(f"accept: {accept}")
+        print(f"requester: {request.client.host}")
+        print()
         profile_name = PROFILE_NAME_TPL.format(uname=uname)
 
         if RE_SINGBOX.search(ua):
@@ -309,6 +349,11 @@ async def subscription(sid: str, request: Request):
             "up": s.get("up", False),
             "ping": "—" if ms is None else (f"{ms / 1000:.1f}s" if ms >= 1000 else f"{ms}ms"),
         })
+    
+    print()
+    print(f"user: {uname}")
+    print(f"requester: {request.client.host}")
+    print()
 
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -325,7 +370,7 @@ def run_server():
     if not user_exists("wiyba"):
         create_user("wiyba")
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8888)
+    uvicorn.run("main:app", host="127.0.0.1", port=8888)
 
 
 if __name__ == "__main__":
@@ -349,6 +394,10 @@ if __name__ == "__main__":
             if len(sys.argv) == 3: username = sys.argv[2]
             info_user(username)
             sys.exit(0)
+        if sys.argv[1] == "import" and len(sys.argv) == 3:
+            path = sys.argv[2]
+            import_users(path)
+            sys.exit(0)
         raise Exception("wrong args")
     except Exception as e:
         print(f"Error: {e}")
@@ -359,4 +408,5 @@ if __name__ == "__main__":
         print("  python3 main.py info")
         print("  python3 main.py info all")
         print("  python3 main.py info <username>")
+        print("  python3 main.py import <path>")
         sys.exit(0)
