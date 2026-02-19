@@ -1,0 +1,51 @@
+mode: rule
+log-level: info
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver:
+    - 1.1.1.1
+    - 8.8.8.8
+  nameserver:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  fake-ip-filter:
+    - '*.lan'
+    - stun.*.*.*
+    - stun.*.*
+    - time.windows.com
+    - time.nist.gov
+    - pool.ntp.org
+    - '*.msftconnecttest.com'
+    - '*.msftncsi.com'
+  ipv6: false
+proxies:
+{proxies}
+proxy-groups:
+  - name: LONDON
+    type: select
+    proxies:
+      - 🇬🇧
+  - name: STOCKHOLM
+    type: select
+    proxies:
+      - 🇸🇪
+rules:
+  - DOMAIN-SUFFIX,vsassets.io,LONDON
+  - IP-CIDR,128.116.0.0/17,LONDON
+  - IP-CIDR,23.173.192.0/24,LONDON
+  - IP-CIDR,103.140.28.0/23,LONDON
+  - IP-CIDR,141.193.3.0/24,LONDON
+  - IP-CIDR,205.201.62.0/24,LONDON
+  - GEOSITE,roblox,LONDON
+  - GEOSITE,youtube,STOCKHOLM
+  - GEOSITE,nixos,DIRECT
+  - GEOSITE,reddit,DIRECT
+  - GEOSITE,steam,DIRECT
+  - GEOSITE,category-ru,DIRECT
+  - GEOSITE,category-ads-all,REJECT
+  - GEOIP,RU,DIRECT
+  - GEOIP,PRIVATE,DIRECT
+  - DOMAIN-SUFFIX,wiyba.org,DIRECT
+  - MATCH,LONDON
