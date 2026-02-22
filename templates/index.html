@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{overflow:hidden;overscroll-behavior:none}
+html,body{overscroll-behavior:none}
 body{font-family:'JetBrains Mono',monospace;background:rgb(10,10,10);color:#dcdcdc;display:flex;flex-direction:column;align-items:center;padding:48px 16px 16px}
 h1{font-family:'Unbounded',sans-serif;font-size:22px;color:#fff;display:flex;align-items:center;gap:10px}
 h1 img{width:28px;height:28px}
@@ -28,6 +28,8 @@ h1 img{width:28px;height:28px}
 .dot.down{background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.5)}
 .lbl{font-size:11px;color:#404040;text-transform:uppercase;letter-spacing:1px;margin-top:24px;margin-bottom:4px}
 .lbl:first-child{margin-top:0}
+.stat{background:rgb(18,18,18);border:1px solid rgb(38,38,38);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+.stat-val{font-size:13px;color:#525252}
 .footer{margin-top:28px;font-size:11px;color:#404040;text-align:center;line-height:1.6}
 .footer a{color:#404040;text-decoration:none}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:rgb(18,18,18);border:1px solid rgb(38,38,38);color:#a3a3a3;padding:8px 20px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:99}
@@ -43,16 +45,22 @@ h1 img{width:28px;height:28px}
   <div class="row" onclick="copy('{{ sub_url }}')"><span class="name">copy subscription</span></div>
   <div class="lbl">links</div>
   {% for l in links %}
-  <div class="row" onclick="copy('{{ l.uri }}')">
+  <div class="row" onclick="copy('{{ l.uri }}')" data-host="{{ l.host }}">
     <span class="name">{{ l.label }}</span>
     <div class="right">
-      <span class="ping">{{ l.ping }}</span>
-      <div class="dot {{ 'up' if l.up else 'down' }}"></div>
+      <span class="ping"></span>
+      <div class="dot"></div>
     </div>
   </div>
   {% endfor %}
+{% if traffic_tiles %}
+  <div class="lbl">usage</div>
+  {% for t in traffic_tiles %}
+  <div class="stat"><span class="name">{{ t.label }}</span><span class="stat-val">{{ t.val }}</span></div>
+  {% endfor %}
+{% endif %}
 </div>
-<div class="footer">{{ checked }}<br><a href="https://t.me/wiybaa">support</a></div>
+<div class="footer">traffic resets at 00:00 UTC<br>{{ 'subscription is active' if active else 'subscription is disabled' }}<br><a href="https://t.me/wiybaa">support</a></div>
 <div class="toast" id="toast">copied</div>
 <script>
 /* jquery-qrcode v0.14.0 - https://larsjung.de/jquery-qrcode/ */
@@ -86,6 +94,16 @@ typeof e)throw Error("bad rs block @ typeNumber:"+b+"/errorCorrectLevel:"+a);b=e
 <script>
 QrCreator.render({text:"{{ sub_url }}",radius:0,ecLevel:"M",fill:"#a3a3a3",background:"rgb(18,18,18)",size:200},document.getElementById("qr"));
 function copy(t){navigator.clipboard.writeText(t).then(function(){var e=document.getElementById("toast");e.classList.add("show");setTimeout(function(){e.classList.remove("show")},1500)})}
+fetch("https://status.wiyba.workers.dev/raw").then(r=>r.json()).then(data=>{
+  const map=Object.fromEntries((data.results||[]).map(r=>[r.name,r]));
+  document.querySelectorAll(".row[data-host]").forEach(row=>{
+    const info=map[row.dataset.host];
+    const ping=row.querySelector(".ping");
+    const dot=row.querySelector(".dot");
+    if(info&&info.up){ping.textContent=info.ms+"ms";dot.classList.add("up")}
+    else{ping.textContent="-";dot.classList.add("down")}
+  })
+}).catch(()=>{document.querySelectorAll(".row[data-host]").forEach(r=>{r.querySelector(".ping").textContent="-";r.querySelector(".dot").classList.add("down")})});
 </script>
 </body>
 </html>

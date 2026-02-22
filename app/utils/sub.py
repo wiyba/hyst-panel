@@ -1,0 +1,121 @@
+import os
+import base64
+import urllib.parse
+import json
+
+from fastapi.responses import PlainTextResponse
+
+from ..database import list_hosts, get_config
+
+def make_links(uname: str, pwd: str) -> list[dict]:
+    return [
+        {
+            "uri":   f"hysteria2://{uname}:{pwd}@{h['address']}:{h['port']}/?sni={h['address']}#{h['name']}",
+            "label": h["name"],
+            "host":  h["address"],
+        }
+        for h in list_hosts(active_only=True)
+    ]
+
+
+def fmt_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def make_base_headers(uname: str, day: int, alltime: int, base_url: str, sid: str) -> tuple[str, dict]:
+    profile_name_tpl = get_config("profile_name_tpl", "hysteria for {uname}")
+    profile_name = profile_name_tpl.format(uname=uname)
+    title_b64    = base64.b64encode(profile_name.encode()).decode()
+    headers = {
+        "profile-update-interval": "12",
+        "subscription-userinfo": f"upload=0; download={day}; total={alltime}; expire=0",
+        "content-disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(profile_name)}",
+        "profile-web-page-url": f"{base_url}/sub/{sid}",
+    }
+    return title_b64, headers
+
+
+def build_singbox(uname: str, pwd: str, base_headers: dict) -> PlainTextResponse:
+    hosts = list_hosts(active_only=True)
+    config = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "templates/singbox.json")))
+    proxy_names = []
+    for h in hosts:
+        proxy_names.append(h["name"])
+        config["outbounds"].append({
+            "type": "hysteria2",
+            "tag":  h["name"],
+            "server": h["address"],
+            "server_port": h["port"],
+            "password": f"{uname}:{pwd}",
+            "tls": {"enabled": True, "server_name": h["address"]},
+        })
+    config["outbounds"][0]["outbounds"] = proxy_names
+    return PlainTextResponse(
+        json.dumps(config, indent=4, ensure_ascii=False),
+        media_type="application/json",
+        headers=base_headers,
+    )
+
+
+def build_clash(uname: str, pwd: str, base_headers: dict) -> PlainTextResponse:
+    hosts = list_hosts(active_only=True)
+    proxies_yaml = "".join(
+        f"  - name: {h['name']}\n"
+        f"    type: hysteria2\n"
+        f"    server: {h['address']}\n"
+        f"    port: {h['port']}\n"
+        f"    password: {uname}:{pwd}\n"
+        f"    skip-cert-verify: true\n"
+        for h in hosts
+    )
+    return PlainTextResponse(
+        open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "templates/clash.yaml")).read().format(proxies=proxies_yaml.rstrip("\n")),
+        media_type="text/yaml",
+        headers=base_headers,
+    )
+
+
+def build_plain(uname: str, pwd: str, title_b64: str, base_headers: dict) -> PlainTextResponse:
+    hosts = list_hosts(active_only=True)
+    body = "\n".join(
+        f"hysteria2://{uname}:{pwd}@{h['address']}:{h['port']}/?sni={h['address']}#{h['name']}"
+        for h in hosts
+    )
+    return PlainTextResponse(
+        base64.b64encode(body.encode()).decode(),
+        headers={
+            **base_headers,
+            "profile-title": f"base64:{title_b64}",
+            "support-url": "https://t.me/wiybaa",
+        },
+    )
+
+
+def build_browser_ctx(
+    uname: str,
+    active: int,
+    sub_url: str,
+    link_list: list[dict],
+    hour: int,
+    day: int,
+    week: int,
+    alltime: int,
+) -> dict:
+    traffic_tiles = [
+        {"label": "hour",     "val": fmt_bytes(hour)},
+        {"label": "day",      "val": fmt_bytes(day)},
+        {"label": "week",     "val": fmt_bytes(week)},
+        {"label": "all-time", "val": fmt_bytes(alltime)},
+    ] if alltime or hour else []
+
+    return {
+        "username":      uname,
+        "sub_url":       sub_url,
+        "links":         link_list,
+        "traffic_tiles": traffic_tiles,
+        "active":        active,
+    }
