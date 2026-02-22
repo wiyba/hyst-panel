@@ -18,9 +18,9 @@
       export HYST_DB_PATH="''${HYST_DB_PATH:-/var/lib/hyst-panel/app.db}"
       mkdir -p "$(dirname "$HYST_DB_PATH")"
       if [ $# -eq 0 ]; then
-        exec ${env}/bin/python ${self}/main.py run
+        exec ${env}/bin/python ${self}/run.py run
       else
-        exec ${env}/bin/python ${self}/main.py "$@"
+        exec ${env}/bin/python ${self}/run.py "$@"
       fi
     '';
   };
