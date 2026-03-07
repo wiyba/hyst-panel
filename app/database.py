@@ -26,6 +26,10 @@ def init_db():
             expires_at    INTEGER NOT NULL DEFAULT 0
         )
     """)
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(users)").fetchall()}
+    for col, default in [("active", "1"), ("traffic_limit", "0"), ("expires_at", "0")]:
+        if col not in cols:
+            cur.execute(f"ALTER TABLE users ADD COLUMN {col} INTEGER NOT NULL DEFAULT {default}")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS traffic (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
