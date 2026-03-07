@@ -214,7 +214,7 @@ def _cli_config(args: list[str]):
 
 async def _run_servers():
     cfg_public   = uvicorn.Config(public_app,   host="127.0.0.1", port=8888, log_level="info")
-    cfg_internal = uvicorn.Config(internal_app, host="127.0.0.1", port=9999, log_level="info")
+    cfg_internal = uvicorn.Config(internal_app, host="127.0.0.1", port=23554, log_level="info")
     srv_public   = uvicorn.Server(cfg_public)
     srv_internal = uvicorn.Server(cfg_internal)
     await asyncio.gather(srv_public.serve(), srv_internal.serve())
